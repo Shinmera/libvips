@@ -288,6 +288,8 @@ libvips/foreign/radload.c
 libvips/foreign/radsave.c
 libvips/foreign/rawload.c
 libvips/foreign/rawsave.c
+libvips/foreign/sf3iload.c
+libvips/foreign/sf3isave.c
 libvips/foreign/spngload.c
 libvips/foreign/spngsave.c
 libvips/foreign/svgload.c

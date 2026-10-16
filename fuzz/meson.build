@@ -53,6 +53,9 @@ endif
 if get_option('qoi')
     fuzz_save_buffer_progs += {'qoisave': '.qoi'}
 endif
+if get_option('sf3i')
+    fuzz_save_buffer_progs += {'sf3isave': '.img.sf3'}
+endif
 if libjpeg_dep.found()
     fuzz_save_buffer_progs += {'jpegsave': '.jpg'}
 endif

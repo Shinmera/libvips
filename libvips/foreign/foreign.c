@@ -2993,6 +2993,13 @@ vips_foreign_operation_init(void)
 	extern GType vips_foreign_save_pfm_target_get_type(void);
 	extern GType vips_foreign_save_pnm_target_get_type(void);
 
+	extern GType vips_foreign_load_sf3i_file_get_type(void);
+	extern GType vips_foreign_load_sf3i_buffer_get_type(void);
+	extern GType vips_foreign_load_sf3i_source_get_type(void);
+	extern GType vips_foreign_save_sf3i_file_get_type(void);
+	extern GType vips_foreign_save_sf3i_buffer_get_type(void);
+	extern GType vips_foreign_save_sf3i_target_get_type(void);
+
 	extern GType vips_foreign_load_qoi_file_get_type(void);
 	extern GType vips_foreign_load_qoi_buffer_get_type(void);
 	extern GType vips_foreign_load_qoi_source_get_type(void);
@@ -3158,6 +3165,15 @@ vips_foreign_operation_init(void)
 	vips_foreign_load_vips_source_get_type();
 	vips_foreign_save_vips_file_get_type();
 	vips_foreign_save_vips_target_get_type();
+
+#ifdef HAVE_SF3I
+	vips_foreign_load_sf3i_file_get_type();
+	vips_foreign_load_sf3i_buffer_get_type();
+	vips_foreign_load_sf3i_source_get_type();
+	vips_foreign_save_sf3i_file_get_type();
+	vips_foreign_save_sf3i_buffer_get_type();
+	vips_foreign_save_sf3i_target_get_type();
+#endif /*HAVE_SF3I*/
 
 #ifdef HAVE_ANALYZE
 	vips_foreign_load_analyze_get_type();

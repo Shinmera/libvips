@@ -47,6 +47,8 @@ foreign_sources = files(
     'radsave.c',
     'rawload.c',
     'rawsave.c',
+    'sf3iload.c',
+    'sf3isave.c',
     'spngload.c',
     'spngsave.c',
     'svgload.c',

@@ -816,6 +816,25 @@ int vips_ppmsave_target(VipsImage *in, VipsTarget *target, ...)
 	G_GNUC_NULL_TERMINATED;
 
 VIPS_API
+int vips_sf3iload(const char *filename, VipsImage **out, ...)
+	G_GNUC_NULL_TERMINATED;
+VIPS_API
+int vips_sf3iload_buffer(void *buf, size_t len, VipsImage **out, ...)
+	G_GNUC_NULL_TERMINATED;
+VIPS_API
+int vips_sf3iload_source(VipsSource *source, VipsImage **out, ...)
+	G_GNUC_NULL_TERMINATED;
+VIPS_API
+int vips_sf3isave(VipsImage *in, const char *filename, ...)
+	G_GNUC_NULL_TERMINATED;
+VIPS_API
+int vips_sf3isave_buffer(VipsImage *in, void **buf, size_t *len, ...)
+	G_GNUC_NULL_TERMINATED;
+VIPS_API
+int vips_sf3isave_target(VipsImage *in, VipsTarget *target, ...)
+	G_GNUC_NULL_TERMINATED;
+
+VIPS_API
 int vips_qoiload(const char *filename, VipsImage **out, ...)
 	G_GNUC_NULL_TERMINATED;
 VIPS_API
