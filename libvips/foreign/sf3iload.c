@@ -38,6 +38,7 @@
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif /*HAVE_CONFIG_H*/
+#include <glib/gi18n-lib.h>
 
 #include <ctype.h>
 #include <stdio.h>
@@ -51,23 +52,15 @@
 #include "pforeign.h"
 
 #ifdef HAVE_SF3I
+#include "sf3/sf3_image.h"
 
 typedef struct _VipsForeignLoadSf3i {
   VipsForeignLoad parent_object;
 
   VipsSource *source;
 
-  /* Properties of this sf3i, from the header.
-   */
-  int width;
-  int height;
-  int depth;
-  int channels;
-  int format;
-
+  struct sf3_image data;
 } VipsForeignLoadSf3i;
-
-static const char *sf3i_magic = {0x81, 0x53, 0x46, 0x33, 0x00, 0xE0, 0xD0, 0x0D, 0x0A, 0x0A, 0x03};
 
 typedef VipsForeignLoadClass VipsForeignLoadSf3iClass;
 
@@ -79,8 +72,8 @@ vips_foreign_load_sf3i_is_a_source(VipsSource *source)
 {
   const unsigned char *data;
 
-  return (data = vips_source_sniff(source, 11)) &&
-    memcmp(data, sf3i_magic, 11) == 0;
+  return (data = vips_source_sniff(source, sizeof(struct sf3_identifier))) &&
+    sf3_check(data, sizeof(struct sf3_identifier)) == SF3_FORMAT_ID_IMAGE;
 }
 
 static void
@@ -97,46 +90,81 @@ vips_foreign_load_sf3i_dispose(GObject *gobject)
   G_OBJECT_CLASS(vips_foreign_load_sf3i_parent_class)->dispose(gobject);
 }
 
+static VipsBandFormat
+vips_sf3i_format_to_band_format(uint8_t fmt)
+{
+  switch(fmt) {
+  case SF3_PIXEL_INT8: return VIPS_FORMAT_CHAR;
+  case SF3_PIXEL_INT16: return VIPS_FORMAT_SHORT;
+  case SF3_PIXEL_INT32: return VIPS_FORMAT_INT;
+  case SF3_PIXEL_UINT8: return VIPS_FORMAT_UCHAR;
+  case SF3_PIXEL_UINT16: return VIPS_FORMAT_USHORT;
+  case SF3_PIXEL_UINT32: return VIPS_FORMAT_UINT;
+  case SF3_PIXEL_FLOAT32: return VIPS_FORMAT_FLOAT;
+  case SF3_PIXEL_FLOAT64: return VIPS_FORMAT_DOUBLE;
+  default: return VIPS_FORMAT_NOTSET;
+  }
+}
+
+static VipsInterpretation
+vips_sf3i_channels_to_interpretation(uint8_t lay)
+{
+  switch(lay) {
+  case SF3_PIXEL_V:
+  case SF3_PIXEL_VA:
+  case SF3_PIXEL_AV:
+    return VIPS_INTERPRETATION_B_W;
+  case SF3_PIXEL_CMYK:
+  case SF3_PIXEL_KYMC:
+    return VIPS_INTERPRETATION_CMYK;
+  default:
+    return VIPS_INTERPRETATION_sRGB;
+  }
+}
+
 /* Scan the header into our class.
  */
 static int
 vips_foreign_load_sf3i_parse_header(VipsForeignLoadSf3i *sf3i)
 {
   VipsObjectClass *class = VIPS_OBJECT_GET_CLASS(sf3i);
-  unsigned char header[30];
-
-  if (vips_source_read(sf3i->source, header, 30) != 30)
+  
+  if (vips_source_read(sf3i->source, &sf3i->data, sizeof(struct sf3_image))
+      != sizeof(struct sf3_image))
     return -1;
 
   /* Check magic bytes.
    */
-  if (memcmp(header, sf3i_magic, 11) != 0) {
-    vips_error(class->nickname, _("bad SF3I magic"));
+  if (sf3_check(&sf3i->data, sizeof(struct sf3_identifier)) != SF3_FORMAT_ID_IMAGE) {
+    vips_error(class->nickname, _("bad SF3I header"));
     return -1;
   }
 
-  sf3i->width = ();
-  sf3i->height = ();
-  sf3i->depth = ();
-  sf3i->
+  /* Validate header values.
+   */
+  if (sf3i->data.width <= 0 ||
+      sf3i->data.width >= VIPS_MAX_COORD ||
+      sf3i->data.height <= 0 ||
+      sf3i->data.height >= VIPS_MAX_COORD ||
+      sf3i->data.depth <= 0 ||
+      sf3i->data.depth >= VIPS_MAX_COORD) {
+    vips_error(class->nickname,
+               _("bad SF3I dimensions"));
+    return -1;
+  }
 
-	/* Validate header values.
-	 */
-	if (sf3i->width <= 0 ||
-		sf3i->width >= VIPS_MAX_COORD ||
-		sf3i->height <= 0 ||
-		sf3i->height >= VIPS_MAX_COORD
-		sf3i->depth <= 0 ||
-		sf3i->depth >= VIPS_MAX_COORD) {
-      vips_error(class->nickname,
-                 _("bad SF3I dimensions"));
-      return -1;
-	}
-
-  if (sf3i->channels <= 0 ||
-      sf3i->channels >= 5) {
+  if ((sf3i->data.channels & 0x0F) < 1 ||
+      (sf3i->data.channels & 0x0F) > 4 ||
+      (sf3i->data.channels & 0xF0) < 0 ||
+      (sf3i->data.channels & 0xF0) > 5) {
     vips_error(class->nickname,
                _("bad SF3I channels"));
+    return -1;
+  }
+
+  if(vips_sf3i_format_to_band_format(sf3i->data.format) == VIPS_FORMAT_NOTSET) {
+    vips_error(class->nickname,
+               _("bad SF3I format"));
     return -1;
   }
 
@@ -157,9 +185,11 @@ vips_foreign_load_sf3i_header(VipsForeignLoad *load)
   if (vips_foreign_load_sf3i_parse_header(sf3i))
     return -1;
 
-  vips_image_init_fields(load->out,
-                         sf3i->width, sf3i->height, sf3i->bands, VIPS_FORMAT_UCHAR,
-                         VIPS_CODING_NONE, VIPS_INTERPRETATION_sRGB, 1.0, 1.0);
+  VipsBandFormat format = vips_sf3i_format_to_band_format(sf3i->data.format);
+  VipsInterpretation interpretation = vips_sf3i_channels_to_interpretation(sf3i->data.channels);
+  vips_image_init_fields(load->out, sf3i->data.width, sf3i->data.height,
+                         sf3i->data.channels, format,
+                         VIPS_CODING_NONE, interpretation, 1.0, 1.0);
 
   return 0;
 }
@@ -174,33 +204,31 @@ vips_foreign_load_sf3i_load(VipsForeignLoad *load)
     vips_object_local_array((VipsObject *) load, 1);
 
   size_t length;
-  const void *data = vips_source_map(sf3i->source, &length);
+  const struct sf3_image *data = (const struct sf3_image *)vips_source_map(sf3i->source, &length);
   if (!data)
     return -1;
 
-  sf3i_desc desc;
-  g_signal_connect(load->real, "close", G_CALLBACK(vips_image_free_buffer), decoded_data);
-
-  t[0] = vips_image_new_from_memory(
-                                    decoded_data,
-                                    desc.width * desc.height * desc.channels,
-                                    desc.width, desc.height,
-                                    desc.channels,
-                                    VIPS_FORMAT_UCHAR);
+  t[0] = vips_image_new_from_memory(&data->pixels,
+                                    data->width * data->height * sf3_image_pixel_stride(data),
+                                    data->width, data->height,
+                                    sf3_image_channel_count(data),
+                                    vips_sf3i_format_to_band_format(data->format));
 
   if (!t[0])
     return -1;
 
   vips_image_init_fields(t[0],
-                         desc.width, desc.height,
-                         desc.channels,
-                         VIPS_FORMAT_UCHAR,
+                         data->width, data->height,
+                         sf3_image_channel_count(data),
+                         vips_sf3i_format_to_band_format(data->format),
                          VIPS_CODING_NONE,
-                         VIPS_INTERPRETATION_sRGB,
+                         vips_sf3i_channels_to_interpretation(data->channels),
                          1.0, 1.0);
 
   return vips_image_write(t[0], load->real);
 }
+
+const char *vips__sf3i_suffs[] = { ".img.sf3", ".sf3", NULL };
 
 static void
 vips_foreign_load_sf3i_class_init(VipsForeignLoadSf3iClass *class)
